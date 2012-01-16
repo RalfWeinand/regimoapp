@@ -1,0 +1,34 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+</head>
+    
+<body>
+
+<div id="signupPage" data-role="page" data-add-back-btn="true">
+
+	<div data-role="header">
+		<h1 id="title">Sign Up</h1>
+	</div>
+
+	<div data-role="content">
+        <fieldset>
+			<label for="email">Email</label>
+			<input id="email" name="email" type="text" value="andrew@poloniouslive.com"/>	
+			<label for="firstName">First Name </label>
+			<input id="firstName" name="firstName" type="text" value="Andrew"/>
+			<label for="lastName">Last Name </label>
+			<input id="lastName" name="lastName" type="text" value="Simpson"/>
+			<label for="password">Password (at least 6 characters) </label>
+			<input id="password" name="password" type="password" value="123456"/>
+			<button onclick="getPicture();">Take Photo</button>
+			<img style="width:60px;" id="test_img" src="" /> 
+		</fieldset>
+		<p><button onclick="signUp();">Sign Up</button></p>
+    </div>
+    
+</div>
+
+</body>
+
+</html>
