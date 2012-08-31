@@ -16,25 +16,30 @@
  * Ajax call
  * 	$.oajax({url: "/rest/user/profile"}).done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
  * Login
- * 	$.oajax("login", "usernameFromInput", "passwordFromInput");
+ * 	$.oajax("login", "usernameFromInput", "passwordFromInput").done(function(data){console.log("login successful");console.log(data);}).fail(function(jqXHR, textStatus){console.log("login "+textStatus);console.log(jqXHR.responseText);});
  *
  */
 (function($) {
 
 	"use strict";
 	
-	var tokens = {}, loginProcess = null, oajax = {
+	var tokens = {}, loginProcess = $.Deferred(), oajax = {
 		baseUrl: "",
 		tokenUrl: "/oauth/token",
 	}, getUrl = function(path){
-		return (oajax.baseUrl && path.indexOf(oajax.baseUrl)==-1) ? oajax.baseUrl + path : path;
+		return (oajax.baseUrl && path.indexOf(oajax.baseUrl)==-1) ? 
+				oajax.baseUrl + path : path;
 	}, isTokenExpired = function(token){
 		return (new Date().valueOf() - token.timestamp) > token.expiresIn * 1000;
 	}, initLoginProcess = function(){
-		loginProcess = $.Deferred();
-		loginProcess.tokenPromise = loginProcess.pipe(function(credential){
+		loginProcess.credentialProcess = $.Deferred();
+		loginProcess.tokenPromise = loginProcess.credentialProcess.pipe(function(credential){
 			return tokenProcess(credential);
+		}).done(function(token){
+			saveToken("owner", token);
+			loginProcess.resolve(token);
 		});
+		// TODO: implement loginProcess timeout
 	}, tokenProcess = function(data){
 		return $.ajax({
 			url: getUrl(oajax.tokenUrl),
@@ -44,11 +49,10 @@
 			headers: {Authorization: "Basic "+oajax.client}
 		});
 	}, saveToken = function(grantType, token){
-		if(token){
-			token.timestamp = new Date().valueOf();
-			tokens[grantType] = token;
-    	}
-	}, resourceProcess = function(options, token){
+		token.timestamp = new Date().valueOf();
+		tokens[grantType] = token;
+	}, resourceProcess = function(options, token, grantType){
+		if(grantType) saveToken(grantType, token);
 		options.url = getUrl(options.url);
 		options.headers =  $.extend(options.headers, {
 			Authorization: "Bearer "+token.access_token
@@ -61,51 +65,44 @@
 		},
 		ajax : function(options, grantType) {
 			grantType = (grantType || "owner").toLowerCase();
-
 			var token = tokens[grantType];
-			if (token && token.access_token) {
+			if (token) {
 				if (isTokenExpired(token)) {
 					// TODO: handle accessToke expire, obtain new accessToke by refreshToken
 					// handle refreshToken expire?
 					return tokenProcess({
-							grant_type: "refresh_token", 
-							refresh_token: token.refresh_token
-						}).pipe(function(token) {
-							saveToken(grantType, token);
-							return resourceProcess(options, token);
-						});
+						grant_type: "refresh_token", 
+						refresh_token: token.refresh_token
+					}).pipe(function(token) {
+						return resourceProcess(options, token, grantType);
+					});
 				} else {
 					return resourceProcess(options, token);
 				}
 			} else if (grantType=="client") {
-				return tokenProcess({
-						grant_type: "client_credentials"
-					}).pipe(function(token) {
-						saveToken(grantType, token);
-						return resourceProcess(options, token);
-					});
+				return tokenProcess({grant_type: "client_credentials"}).pipe(function(token) {
+					return resourceProcess(options, token, grantType);
+				});
 			} else {
 				// call the login function, solved loginProcess directly if credential returned
 				if($.isFunction(oajax.login)){
 					var credential = oajax.login();
-					if(credential) method.login(credential.username, credential.password);
+					if(credential && credential.username){
+						method.login(credential.username, credential.password);
+					}
 				}
-
-				return loginProcess.tokenPromise.pipe(function(token){
-					saveToken(grantType, token);
-					return resourceProcess(options, token);
+				return loginProcess.pipe(function(token){
+					return resourceProcess(options, token, grantType);
 				});
 			}
 		},
 		login : function(username, password) {
-			if(username){
-				if(loginProcess.state() != "pending") initLoginProcess();
-				loginProcess.resolve({
-					grant_type: "password",
-					username: username, 
-					password: password
-				});
-			}
+			if(loginProcess.credentialProcess.state() != "pending") initLoginProcess();
+			loginProcess.credentialProcess.resolve({
+				grant_type: "password",
+				username: username, 
+				password: password
+			});
 			return loginProcess.tokenPromise;
 		}
 	};
