@@ -26,6 +26,7 @@
 	var tokens = {}, loginProcess = $.Deferred(), oajax = {
 		baseUrl: "",
 		tokenUrl: "/oauth/token",
+		grantType: "owner"
 	}, getUrl = function(path){
 		return (oajax.baseUrl && path.indexOf(oajax.baseUrl)==-1) ? 
 				oajax.baseUrl + path : path;
@@ -64,7 +65,7 @@
 			initLoginProcess();
 		},
 		ajax : function(options, grantType) {
-			grantType = (grantType || "owner").toLowerCase();
+			grantType = (grantType || oajax.grantType).toLowerCase();
 			var token = tokens[grantType];
 			if (token) {
 				if (isTokenExpired(token)) {
