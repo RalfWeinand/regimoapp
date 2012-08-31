@@ -23,13 +23,18 @@
 
 	"use strict";
 	
-	var tokens = {}, loginProcess = $.Deferred(), oajax = {
+	var tokens = {}, loginProcess = null, oajax = {
 		baseUrl: "",
 		tokenUrl: "/oauth/token",
 	}, getUrl = function(path){
 		return (oajax.baseUrl && path.indexOf(oajax.baseUrl)==-1) ? oajax.baseUrl + path : path;
 	}, isTokenExpired = function(token){
 		return (new Date().valueOf() - token.timestamp) > token.expiresIn * 1000;
+	}, initLoginProcess = function(){
+		loginProcess = $.Deferred();
+		loginProcess.tokenPromise = loginProcess.pipe(function(credential){
+			return tokenProcess(credential);
+		});
 	}, tokenProcess = function(data){
 		return $.ajax({
 			url: getUrl(oajax.tokenUrl),
@@ -51,6 +56,7 @@
 	}, methods = {
 		init : function(settings) {
 			$.extend(oajax, settings);
+			initLoginProcess();
 		},
 		ajax : function(options, grantType) {
 			grantType = (grantType || "owner").toLowerCase();
@@ -77,7 +83,7 @@
 					});
 			} else {
 				// create new loginProcess if exist one is finished 
-				if(loginProcess.state() != "pending") loginProcess = $.Deferred();
+				if(loginProcess.state() != "pending") initLoginProcess();
 
 				// call the login function, solved loginProcess directly if credential returned
 				if($.isFunction(oajax.login)){
@@ -85,9 +91,7 @@
 					if(credential) method.login(credential.username, credential.password);
 				}
 
-				return loginProcess.pipe(function(credential){
-						return tokenProcess(credential);
-					}).pipe(function(token){
+				return loginProcess.tokenPromise.pipe(function(token){
 						return resourceProcess(options, grantType, token);
 				    });
 			}
@@ -99,7 +103,7 @@
 					username: username, 
 					password: password
 				});
-				return loginProcess.promise();
+				return loginProcess.tokenPromise;
 			}
 		}
 	};
