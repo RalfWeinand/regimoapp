@@ -12,9 +12,9 @@
  * 
  * Examples:
  * Init
- * 	$.oajax("init", {tokenUrl:"/oauth/token", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
+ * 	$.oajax("init", {baseUrl:"http://regimo.poloniouslive.com", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
  * Ajax call
- * 	$.oajax({url: "/rest/user/profile", type: "GET", dataType: "json"}).done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
+ * 	$.oajax({url: "/rest/user/profile"}).done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
  * Login
  * 	$.oajax("login", "usernameFromInput", "passwordFromInput");
  *
@@ -23,47 +23,79 @@
 
 	"use strict";
 	
-	var oajax = {}, token = {}, loginTask = null, getAccessToken = function(data){
+	var tokens = {}, loginProcess = $.Deferred(), oajax = {
+		baseUrl: "",
+		tokenUrl: "/oauth/token",
+	}, getUrl = function(path){
+		return (oajax.baseUrl && path.indexOf(oajax.baseUrl)==-1) ? oajax.baseUrl + path : path;
+	}, isTokenExpired = function(token){
+		return (new Date().valueOf() - token.timestamp) > token.expiresIn * 1000;
+	}, tokenProcess = function(data){
 		return $.ajax({
-			url: oajax.tokenUrl,
+			url: getUrl(oajax.tokenUrl),
 			type: "post",
 			dataType: "json",
 			data: data,
-			beforeSend: function (xhr) {
-				xhr.setRequestHeader("Authorization", "Basic "+oajax.client);
-			}
+			headers: {Authorization: "Basic "+oajax.client}
 		});
+	}, resourceProcess = function(options, grantType, token){
+		if(token){
+			token.timestamp = new Date().valueOf();
+			tokens[grantType] = token;
+    	}
+		options.url = getUrl(options.url);
+		options.headers =  $.extend(options.headers, {
+			Authorization: "Bearer "+tokens[grantType].access_token
+		});
+    	return $.ajax(options);
 	}, methods = {
 		init : function(settings) {
 			$.extend(oajax, settings);
 		},
 		ajax : function(options, grantType) {
 			grantType = (grantType || "owner").toLowerCase();
-			options.beforeSend = function(xhr){
-				xhr.setRequestHeader("Authorization", "Bearer "+token[grantType].access_token);
-			};
-			if (token[grantType] && token[grantType].access_token) {
-				// TODO: handle accessToke expire
-				return $.ajax(options);
+
+			var token = tokens[grantType];
+			if (token && token.access_token) {
+				if(isTokenExpired(token)){
+					// TODO: handle accessToke expire, obtain new accessToke by refreshToken
+					// handle refreshToken expire?
+					return tokenProcess({
+							grant_type: "refresh_token", 
+							refresh_token: token.refresh_token
+						}).pipe(function(token) {
+							return resourceProcess(options, grantType, token);
+						});
+				}
+				else{
+					return resourceProcess(options, grantType);
+				}
 			} else if (grantType=="client") {
-				return getAccessToken.call(this, {grant_type: "client_credentials"}).pipe(function(data) {
-			    	token[grantType] = data;
-			    	return $.ajax(options);
-			    });
+				return tokenProcess({
+						grant_type: "client_credentials"
+					}).pipe(function(token) {
+						return resourceProcess(options, grantType, token);
+					});
 			} else {
-				loginTask = $.Deferred();
-				if($.isFunction(oajax.login)) oajax.login(loginTask);
-				return loginTask.pipe(function(credential){
-					return getAccessToken.call(this, credential);
-				}).pipe(function(data){
-			    	token[grantType] = data;
-			    	return $.ajax(options);
-			    });
+				// create new loginProcess if exist one is finished 
+				if(loginProcess.state() != "pending") loginProcess = $.Deferred();
+
+				// call the login function, solved loginProcess directly if credential returned
+				if($.isFunction(oajax.login)){
+					var credential = oajax.login();
+					if(credential) method.login(credential.username, credential.password);
+				}
+
+				return loginProcess.pipe(function(credential){
+						return tokenProcess(credential);
+					}).pipe(function(token){
+						return resourceProcess(options, grantType, token);
+				    });
 			}
 		},
 		login : function(username, password) {
-			if(loginTask){
-				loginTask.resolve({
+			if(loginProcess && username){
+				loginProcess.resolve({
 					grant_type: "password",
 					username: username, 
 					password: password
