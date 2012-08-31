@@ -43,14 +43,15 @@
 			data: data,
 			headers: {Authorization: "Basic "+oajax.client}
 		});
-	}, resourceProcess = function(options, grantType, token){
+	}, saveToken = function(grantType, token){
 		if(token){
 			token.timestamp = new Date().valueOf();
 			tokens[grantType] = token;
     	}
+	}, resourceProcess = function(options, token){
 		options.url = getUrl(options.url);
 		options.headers =  $.extend(options.headers, {
-			Authorization: "Bearer "+tokens[grantType].access_token
+			Authorization: "Bearer "+token.access_token
 		});
     	return $.ajax(options);
 	}, methods = {
@@ -70,21 +71,20 @@
 							grant_type: "refresh_token", 
 							refresh_token: token.refresh_token
 						}).pipe(function(token) {
-							return resourceProcess(options, grantType, token);
+							saveToken(grantType, token);
+							return resourceProcess(options, token);
 						});
 				} else {
-					return resourceProcess(options, grantType);
+					return resourceProcess(options, token);
 				}
 			} else if (grantType=="client") {
 				return tokenProcess({
 						grant_type: "client_credentials"
 					}).pipe(function(token) {
-						return resourceProcess(options, grantType, token);
+						saveToken(grantType, token);
+						return resourceProcess(options, token);
 					});
 			} else {
-				// create new loginProcess if exist one is finished 
-				if(loginProcess.state() != "pending") initLoginProcess();
-
 				// call the login function, solved loginProcess directly if credential returned
 				if($.isFunction(oajax.login)){
 					var credential = oajax.login();
@@ -92,19 +92,21 @@
 				}
 
 				return loginProcess.tokenPromise.pipe(function(token){
-						return resourceProcess(options, grantType, token);
-				    });
+					saveToken(grantType, token);
+					return resourceProcess(options, token);
+				});
 			}
 		},
 		login : function(username, password) {
-			if(loginProcess && username){
+			if(username){
+				if(loginProcess.state() != "pending") initLoginProcess();
 				loginProcess.resolve({
 					grant_type: "password",
 					username: username, 
 					password: password
 				});
-				return loginProcess.tokenPromise;
 			}
+			return loginProcess.tokenPromise;
 		}
 	};
 
