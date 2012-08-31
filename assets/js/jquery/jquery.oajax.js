@@ -99,6 +99,7 @@
 					username: username, 
 					password: password
 				});
+				return loginProcess.promise();
 			}
 		}
 	};
