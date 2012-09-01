@@ -71,10 +71,10 @@
 				if (isTokenExpired(token)) {
 					// TODO: handle accessToke expire, obtain new accessToke by refreshToken
 					// handle refreshToken expire?
-					return tokenProcess({
-						grant_type: "refresh_token", 
-						refresh_token: token.refresh_token
-					}).pipe(function(token) {
+					return tokenProcess(grantType=="client"? 
+							{grant_type: "client_credentials"}:
+							{grant_type: "refresh_token", refresh_token: token.refresh_token}
+					).pipe(function(token) {
 						return resourceProcess(options, token, grantType);
 					});
 				} else {
