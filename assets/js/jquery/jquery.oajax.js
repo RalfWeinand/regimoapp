@@ -30,14 +30,12 @@
 	}, getUrl = function(path){
 		return (oajax.baseUrl && path.indexOf(oajax.baseUrl)==-1) ? 
 				oajax.baseUrl + path : path;
-	}, isTokenExpired = function(token){
-		return (new Date().valueOf() - token.timestamp) > token.expiresIn * 1000;
 	}, initLoginProcess = function(){
 		loginProcess.credentialProcess = $.Deferred();
 		loginProcess.tokenPromise = loginProcess.credentialProcess.pipe(function(credential){
 			return tokenProcess(credential);
 		}).done(function(token){
-			saveToken("owner", token);
+			saveToken(token, "owner");
 			loginProcess.resolve(token);
 		});
 		// TODO: implement loginProcess timeout
@@ -49,16 +47,9 @@
 			data: data,
 			headers: {Authorization: "Basic "+oajax.client}
 		});
-	}, saveToken = function(grantType, token){
+	}, saveToken = function(token, grantType){
 		token.timestamp = new Date().valueOf();
 		tokens[grantType] = token;
-	}, resourceProcess = function(options, token, grantType){
-		if(grantType) saveToken(grantType, token);
-		options.url = getUrl(options.url);
-		options.headers =  $.extend(options.headers, {
-			Authorization: "Bearer "+token.access_token
-		});
-    	return $.ajax(options);
 	}, methods = {
 		init : function(settings) {
 			$.extend(oajax, settings);
@@ -66,36 +57,36 @@
 		},
 		ajax : function(options, grantType) {
 			grantType = (grantType || oajax.grantType).toLowerCase();
-			var token = tokens[grantType];
-			if (token) {
-				if (isTokenExpired(token)) {
-					// TODO: handle accessToke expire, obtain new accessToke by refreshToken
+			return $.when(function(){
+				var token = tokens[grantType];
+				if(token && token.expiresIn * 1000 >= (new Date().valueOf() - token.timestamp)){
+					return token;
+				}
+				else if(token && token.refresh_token){
 					// handle refreshToken expire?
-					return tokenProcess(grantType=="client"? 
-							{grant_type: "client_credentials"}:
-							{grant_type: "refresh_token", refresh_token: token.refresh_token}
-					).pipe(function(token) {
-						return resourceProcess(options, token, grantType);
-					});
-				} else {
-					return resourceProcess(options, token);
+					return tokenProcess({grant_type: "refresh_token", refresh_token: token.refresh_token});
 				}
-			} else if (grantType=="client") {
-				return tokenProcess({grant_type: "client_credentials"}).pipe(function(token) {
-					return resourceProcess(options, token, grantType);
-				});
-			} else {
-				// call the login function, solved loginProcess directly if credential returned
-				if($.isFunction(oajax.login)){
-					var credential = oajax.login();
-					if(credential && credential.username){
-						method.login(credential.username, credential.password);
+				else if(grantType=="client"){
+					return tokenProcess({grant_type: "client_credentials"});
+				}
+				else{
+					// call the login function, solved loginProcess directly if credential returned
+					if($.isFunction(oajax.login)){
+						var credential = oajax.login();
+						if(credential && credential.username){
+							method.login(credential.username, credential.password);
+						}
 					}
+					return loginProcess;
 				}
-				return loginProcess.pipe(function(token){
-					return resourceProcess(options, token, grantType);
+			}).pipe(function(token){
+				if(!token.timestamp) saveToken(token, grantType);
+				options.url = getUrl(options.url);
+				options.headers =  $.extend(options.headers, {
+					Authorization: "Bearer "+token.access_token
 				});
-			}
+		    	return $.ajax(options);
+			});
 		},
 		login : function(username, password) {
 			if(loginProcess.credentialProcess.state() != "pending") initLoginProcess();
