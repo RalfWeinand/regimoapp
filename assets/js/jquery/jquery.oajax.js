@@ -12,11 +12,12 @@
  *
  * Examples:
  * Init
- * 	$.oajaxInit({baseUrl:"http://regimo.poloniouslive.com", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
+ * 	$.oajax.init({baseUrl:"http://regimo.poloniouslive.com", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
  * Ajax call
  * 	$.oajax("/rest/user/profile").done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
+ * 	$.oajax.post();
  * Login
- * 	$.oajaxLogin("usernameFromInput", "passwordFromInput").done(function(data){console.log("login successful");console.log(data);}).fail(function(jqXHR, textStatus){console.log("login "+textStatus);console.log(jqXHR.responseText);});
+ * 	$.oajax.login("usernameFromInput", "passwordFromInput").done(function(data){console.log("login successful");console.log(data);}).fail(function(jqXHR, textStatus){console.log("login "+textStatus);console.log(jqXHR.responseText);});
  *
  */
 (function($) {
@@ -79,7 +80,7 @@
 	},
 
 	isTokenValid = function(token){
-		return token && token.expiresIn * 1000 >= (new Date().valueOf() - token.timestamp);
+		return token && token.expires_in * 1000 >= (new Date().valueOf() - token.timestamp);
 	},
 
 	hasRefreshToken = function(token){
@@ -112,6 +113,13 @@
 		}
 	},
 
+	parseOptions = function(url, options){
+		if ( typeof url === "object" ) return url;
+		options = options || {};
+		if(url) options.url = url;
+		return options;
+	},
+
 	init = function(settings) {
 		method.mixin(oauth, settings);
 		initLoginProcess();
@@ -128,13 +136,7 @@
 	},
 
 	oajax = function(url, options) {
-		if ( typeof url === "object" ) {
-			options = url;
-		}
-		else{
-			options = options || {};
-			options.url = url;
-		}
+		options = parseOptions(url, options);
 		var grantType = (options.grantType || oauth.grantType).toLowerCase();
 		return method.when(getToken(grantType))[method.then](function(token){
 			options.url = getUrl(options.url);
@@ -143,10 +145,36 @@
 			});
 	    	return method.xhr(options);
 		});
+	},
+
+	// short hands for $.oajax.get/post/put/del
+	omethod = function(xhrMethod, hasData){
+		return hasData ?
+			function(url, data, dataType){
+				options = parseOptions(url);
+				options[method.xhrMethod] = xhrMethod;
+				if(data){
+					options.data = data;
+					if(dataType){
+						options[method.xhrDataType] = dataType;
+					}
+				}
+				return oajax(options);
+			} :
+			function(url, options) {
+				options = parseOptions(url, options);
+				options[method.xhrMethod] = xhrMethod;
+				return oajax(options);
+			};
 	};
 
-	$.oajaxInit = init;
-	$.oajaxLogin = login;
 	$.oajax = oajax;
+	$.oajax.init = init;
+	$.oajax.login = login;
+
+	$.oajax.get = omethod("get", false);
+	$.oajax.post= omethod("post",true);
+	$.oajax.put = omethod("put", true);
+	$.oajax.del = omethod("del", false);
 
 })(jQuery);
