@@ -12,102 +12,139 @@
  *
  * Examples:
  * Init
- * 	$.oauth("init", {baseUrl:"http://regimo.poloniouslive.com", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
+ * 	$.oajaxInit({baseUrl:"http://regimo.poloniouslive.com", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
  * Ajax call
- * 	$.oauth({url: "/rest/user/profile"}).done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
+ * 	$.oajax("/rest/user/profile").done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
  * Login
- * 	$.oauth("login", "usernameFromInput", "passwordFromInput").done(function(data){console.log("login successful");console.log(data);}).fail(function(jqXHR, textStatus){console.log("login "+textStatus);console.log(jqXHR.responseText);});
+ * 	$.oajaxLogin("usernameFromInput", "passwordFromInput").done(function(data){console.log("login successful");console.log(data);}).fail(function(jqXHR, textStatus){console.log("login "+textStatus);console.log(jqXHR.responseText);});
  *
  */
 (function($) {
 
 	"use strict";
 
-	var tokens = {}, loginProcess = $.Deferred(), oauth = {
+	var tokens = {},
+
+	oauth = {
 		baseUrl: "",
 		tokenUrl: "/oauth/token",
 		grantType: "owner"
-	}, getUrl = function(path){
+	},
+
+	method = {
+		mixin: 			$.extend,
+		when: 			$.when,
+		isFunction: 	$.isFunction,
+		deferred: 		$.Deferred,
+		xhr: 			$.ajax,
+		xhrMethod: 		"type",
+		dataType: 		"dataType",
+		then: 			"pipe",
+		done:			"done",
+		isProcessDone: function(process){
+			return process.state() != "pending";
+		}
+	},
+
+	loginProcess = method.deferred(),
+
+	getUrl = function(path){
 		return (oauth.baseUrl && path.indexOf(oauth.baseUrl)==-1) ?
 				oauth.baseUrl + path : path;
-	}, initLoginProcess = function(){
-		loginProcess.credentialProcess = $.Deferred();
-		loginProcess.tokenPromise = loginProcess.credentialProcess.pipe(function(credential){
-			return tokenProcess(credential);
-		}).done(function(token){
-			saveToken(token, "owner");
-			loginProcess.resolve(token);
+	},
+
+	initLoginProcess = function(){
+		loginProcess.credentialProcess = method.deferred();
+		loginProcess.tokenPromise = loginProcess.credentialProcess[method.then](function(credential){
+			return tokenProcess("owner", credential);
 		});
 		// TODO: implement loginProcess timeout
-	}, tokenProcess = function(data){
-		return $.ajax({
-			url: getUrl(oauth.tokenUrl),
-			type: "post",
-			dataType: "json",
-			data: data,
-			headers: {Authorization: "Basic "+oauth.client}
+	},
+
+	tokenProcess = function(grantType, data){
+		var tokenSettings = {
+				url: getUrl(oauth.tokenUrl),
+				data: data,
+				headers: {Authorization: "Basic "+oauth.client}
+			};
+		tokenSettings[method.xhrMethod] = "post";
+		tokenSettings[method.dataType] = "json";
+		return method.xhr(tokenSettings)[method.done](function(token){
+			token.timestamp = new Date().valueOf();
+			tokens[grantType] = token;
+			return token;
 		});
-	}, saveToken = function(token, grantType){
-		token.timestamp = new Date().valueOf();
-		tokens[grantType] = token;
-	}, methods = {
-		init : function(settings) {
-			$.extend(oauth, settings);
-			initLoginProcess();
-		},
-		ajax : function(options, grantType) {
-			grantType = (grantType || oauth.grantType).toLowerCase();
-			return $.when(function(){
-				var token = tokens[grantType];
-				if(token && token.expiresIn * 1000 >= (new Date().valueOf() - token.timestamp)){
-					return token;
+	},
+
+	isTokenValid = function(token){
+		return token && token.expiresIn * 1000 >= (new Date().valueOf() - token.timestamp);
+	},
+
+	hasRefreshToken = function(token){
+		return token && token.refresh_token;
+	},
+
+	getToken = function(grantType){
+		var token = tokens[grantType];
+		if(isTokenValid(token)){
+			return token;
+		}
+		else if(hasRefreshToken(token)){
+			// handle refreshToken expire?
+			return tokenProcess(grantType,
+					{grant_type: "refresh_token", refresh_token: token.refresh_token});
+		}
+		else if(grantType=="client"){
+			return tokenProcess(grantType,
+					{grant_type: "client_credentials"});
+		}
+		else{
+			// call the login function, solved loginProcess directly if credential returned
+			if(method.isFunction(oauth.login)){
+				var credential = oauth.login();
+				if(credential && credential.username){
+					login(credential.username, credential.password);
 				}
-				else if(token && token.refresh_token){
-					// handle refreshToken expire?oauth
-					return tokenProcess({grant_type: "refresh_token", refresh_token: token.refresh_token});
-				}
-				else if(grantType=="client"){
-					return tokenProcess({grant_type: "client_credentials"});
-				}
-				else{
-					// call the login function, solved loginProcess directly if credential returned
-					if($.isFunction(oauth.login)){
-						var credential = oauth.login();
-						if(credential && credential.username){
-							method.login(credential.username, credential.password);
-						}
-					}
-					return loginProcess.tokenPromise;
-				}
-			}).pipe(function(token){
-				if(!token.timestamp) saveToken(token, grantType);
-				options.url = getUrl(options.url);
-				options.headers =  $.extend(options.headers, {
-					Authorization: "Bearer "+token.access_token
-				});
-		    	return $.ajax(options);
-			});
-		},
-		login : function(username, password) {
-			if(loginProcess.credentialProcess.state() != "pending") initLoginProcess();
-			loginProcess.credentialProcess.resolve({
-				grant_type: "password",
-				username: username,
-				password: password
-			});
+			}
 			return loginProcess.tokenPromise;
 		}
+	},
+
+	init = function(settings) {
+		method.mixin(oauth, settings);
+		initLoginProcess();
+	},
+
+	login = function(username, password) {
+		if(method.isProcessDone(loginProcess.credentialProcess)) initLoginProcess();
+		loginProcess.credentialProcess.resolve({
+			grant_type: "password",
+			username: username,
+			password: password
+		});
+		return loginProcess.tokenPromise;
+	},
+
+	oajax = function(url, options) {
+		if ( typeof url === "object" ) {
+			options = url;
+		}
+		else{
+			options = options || {};
+			options.url = url;
+		}
+		var grantType = (options.grantType || oauth.grantType).toLowerCase();
+		return method.when(getToken(grantType))[method.then](function(token){
+			options.url = getUrl(options.url);
+			options.headers = method.mixin(options.headers, {
+				Authorization: "Bearer "+token.access_token
+			});
+	    	return method.xhr(options);
+		});
 	};
 
-	$.oajax = function(method) {
-		if (methods[method]) {
-			return methods[method].apply(this, Array.prototype.slice.call(
-					arguments, 1));
-		} else if (typeof method === 'object' || !method) {
-			return methods.ajax.apply(this, arguments);
-		} else {
-			$.error('Method ' + method + ' does not exist on jQuery.oajax');
-		}
-	};
+	$.oajaxInit = init;
+	$.oajaxLogin = login;
+	$.oajax = oajax;
 
 })(jQuery);
