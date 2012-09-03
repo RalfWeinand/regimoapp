@@ -32,16 +32,18 @@
 	},
 
 	method = {
-		mixin: 			$.extend,
-		when: 			$.when,
-		isFunction: 	$.isFunction,
-		deferred: 		$.Deferred,
-		xhr: 			$.ajax,
-		xhrMethod: 		"type",
-		dataType: 		"dataType",
-		then: 			"pipe",
-		done:			"done",
-		isProcessDone: function(process){
+		mixin: 		$.extend,
+		isFunction: $.isFunction,
+
+		xhr: 		$.ajax,
+		xhrMethod: 	"type",
+		xhrDataType:"dataType",
+
+		deferred: 	$.Deferred,
+		when: 		$.when,
+		then: 		"pipe",
+		done:		"done",
+		isFulfilled:function(process){
 			return process.state() != "pending";
 		}
 	},
@@ -68,7 +70,7 @@
 				headers: {Authorization: "Basic "+oauth.client}
 			};
 		tokenSettings[method.xhrMethod] = "post";
-		tokenSettings[method.dataType] = "json";
+		tokenSettings[method.xhrDataType] = "json";
 		return method.xhr(tokenSettings)[method.done](function(token){
 			token.timestamp = new Date().valueOf();
 			tokens[grantType] = token;
@@ -116,7 +118,7 @@
 	},
 
 	login = function(username, password) {
-		if(method.isProcessDone(loginProcess.credentialProcess)) initLoginProcess();
+		if(method.isFulfilled(loginProcess.credentialProcess)) initLoginProcess();
 		loginProcess.credentialProcess.resolve({
 			grant_type: "password",
 			username: username,
