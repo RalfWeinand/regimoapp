@@ -1,35 +1,35 @@
 /*
- * OAjax jQuery plugin  
+ * OAjax jQuery plugin
  * Perform an asynchronous HTTP (Ajax) request with OAuth
  *
  * @copyright 2012 Polonious Pty Ltd.
- * @website https://github.com/polonious/jquery-oajax/
+ * @website https://github.com/polonious/jquery-oauth/
  * @author Ted Liang <tedliang[dot]email[at]gmail[dot]com>
  * @version 1.0
- *  
+ *
  * Licensed under the MIT License
  * http://www.opensource.org/licenses/mit-license.php
- * 
+ *
  * Examples:
  * Init
- * 	$.oajax("init", {baseUrl:"http://regimo.poloniouslive.com", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
+ * 	$.oauth("init", {baseUrl:"http://regimo.poloniouslive.com", client:"cGhvbmVnYXBAcmVnaW1vOnJnbXBnMTBwc3c=", login: function(){console.log("open login dialog...");}});
  * Ajax call
- * 	$.oajax({url: "/rest/user/profile"}).done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
+ * 	$.oauth({url: "/rest/user/profile"}).done(function(data){console.log(data);}).fail(function(jqXHR, textStatus){console.log(textStatus);console.log(jqXHR.responseText);});
  * Login
- * 	$.oajax("login", "usernameFromInput", "passwordFromInput").done(function(data){console.log("login successful");console.log(data);}).fail(function(jqXHR, textStatus){console.log("login "+textStatus);console.log(jqXHR.responseText);});
+ * 	$.oauth("login", "usernameFromInput", "passwordFromInput").done(function(data){console.log("login successful");console.log(data);}).fail(function(jqXHR, textStatus){console.log("login "+textStatus);console.log(jqXHR.responseText);});
  *
  */
 (function($) {
 
 	"use strict";
-	
-	var tokens = {}, loginProcess = $.Deferred(), oajax = {
+
+	var tokens = {}, loginProcess = $.Deferred(), oauth = {
 		baseUrl: "",
 		tokenUrl: "/oauth/token",
 		grantType: "owner"
 	}, getUrl = function(path){
-		return (oajax.baseUrl && path.indexOf(oajax.baseUrl)==-1) ? 
-				oajax.baseUrl + path : path;
+		return (oauth.baseUrl && path.indexOf(oauth.baseUrl)==-1) ?
+				oauth.baseUrl + path : path;
 	}, initLoginProcess = function(){
 		loginProcess.credentialProcess = $.Deferred();
 		loginProcess.tokenPromise = loginProcess.credentialProcess.pipe(function(credential){
@@ -41,29 +41,29 @@
 		// TODO: implement loginProcess timeout
 	}, tokenProcess = function(data){
 		return $.ajax({
-			url: getUrl(oajax.tokenUrl),
+			url: getUrl(oauth.tokenUrl),
 			type: "post",
 			dataType: "json",
 			data: data,
-			headers: {Authorization: "Basic "+oajax.client}
+			headers: {Authorization: "Basic "+oauth.client}
 		});
 	}, saveToken = function(token, grantType){
 		token.timestamp = new Date().valueOf();
 		tokens[grantType] = token;
 	}, methods = {
 		init : function(settings) {
-			$.extend(oajax, settings);
+			$.extend(oauth, settings);
 			initLoginProcess();
 		},
 		ajax : function(options, grantType) {
-			grantType = (grantType || oajax.grantType).toLowerCase();
+			grantType = (grantType || oauth.grantType).toLowerCase();
 			return $.when(function(){
 				var token = tokens[grantType];
 				if(token && token.expiresIn * 1000 >= (new Date().valueOf() - token.timestamp)){
 					return token;
 				}
 				else if(token && token.refresh_token){
-					// handle refreshToken expire?
+					// handle refreshToken expire?oauth
 					return tokenProcess({grant_type: "refresh_token", refresh_token: token.refresh_token});
 				}
 				else if(grantType=="client"){
@@ -71,13 +71,13 @@
 				}
 				else{
 					// call the login function, solved loginProcess directly if credential returned
-					if($.isFunction(oajax.login)){
-						var credential = oajax.login();
+					if($.isFunction(oauth.login)){
+						var credential = oauth.login();
 						if(credential && credential.username){
 							method.login(credential.username, credential.password);
 						}
 					}
-					return loginProcess;
+					return loginProcess.tokenPromise;
 				}
 			}).pipe(function(token){
 				if(!token.timestamp) saveToken(token, grantType);
@@ -92,7 +92,7 @@
 			if(loginProcess.credentialProcess.state() != "pending") initLoginProcess();
 			loginProcess.credentialProcess.resolve({
 				grant_type: "password",
-				username: username, 
+				username: username,
 				password: password
 			});
 			return loginProcess.tokenPromise;
@@ -109,10 +109,5 @@
 			$.error('Method ' + method + ' does not exist on jQuery.oajax');
 		}
 	};
-
-	// load configuration from attribute data-oajax-config in script tag if exist
-	var config = $("script[data-oajax-config]").first().attr("data-oajax-config");
-	if( config ) $.extend(oajax, eval("({" + config + "})"));
-		
 
 })(jQuery);
