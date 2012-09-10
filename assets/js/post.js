@@ -3,5 +3,11 @@ $('#postPage').live('pageshow', function(event) {
 		var post = data.post;
 		$('#title').text(post.postTitle);
 		$('#content').html(post.postContent);
+
+		if (ttsActivated) {
+			window.plugins.tts.speak(post.postTitle);
+			window.plugins.tts.silence(800);
+			window.plugins.tts.speak($('#content').text());
+		}
 	});
 });

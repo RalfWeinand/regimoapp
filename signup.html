@@ -1,33 +1,64 @@
 <!DOCTYPE HTML>
 <html>
 <head>
+<script type="text/javascript" charset="utf-8">
+	// A button will call this function
+	//
+	function capturePhoto() {
+		navigator.camera.getPicture(dump_pic, onFail, {
+			quality : 50
+		});
+	}
+
+	function dump_pic(data) {
+		var viewport = document.getElementById('viewport');
+		console.log(data);
+		viewport.style.display = "";
+		viewport.style.position = "absolute";
+		viewport.style.top = "10px";
+		viewport.style.left = "10px";
+		document.getElementById("test_img").src = "data:image/jpeg;base64,"
+				+ data;
+	}
+
+	// Called if something bad happens.
+	// 
+	function onFail(message) {
+		alert('Failed because: ' + message);
+	}
+</script>
+
 </head>
-    
-<body>
 
-<div id="signupPage" data-role="page" data-add-back-btn="true">
+<body onload="init();">
 
-	<div data-role="header">
-		<h1 id="title">Sign Up</h1>
+	<div id="signupPage" data-role="page" data-add-back-btn="true">
+
+		<div data-role="header" data-theme="i" data-position="fixed">
+			<h1 id="title">Sign Up</h1>
+		</div>
+
+		<div data-role="content">
+			<fieldset>
+				<label for="email">Email</label> <input id="email" name="email"
+					type="text" value="" /> <label
+					for="firstName">First Name </label> <input id="firstName"
+					name="firstName" type="text" value="" /> <label
+					for="lastName">Last Name </label> <input id="lastName"
+					name="lastName" type="text" value="" /> <label
+					for="password">Password (at least 6 characters) </label> <input
+					id="password" name="password" type="password" value="" />
+				<button onclick="capturePhoto();">Take Photo</button>
+				<div id="viewport" class="viewport" style="display: none;">
+					<img style="width: 60px; height: 60px" id="test_img" src="" />
+				</div>
+			</fieldset>
+			<p>
+				<button onclick="signUp();">Sign Up</button>
+			</p>
+		</div>
+
 	</div>
-
-	<div data-role="content">
-        <fieldset>
-			<label for="email">Email</label>
-			<input id="email" name="email" type="text" value="a@poloniouslive.com"/>	
-			<label for="firstName">First Name </label>
-			<input id="firstName" name="firstName" type="text" value="A"/>
-			<label for="lastName">Last Name </label>
-			<input id="lastName" name="lastName" type="text" value="S"/>
-			<label for="password">Password (at least 6 characters) </label>
-			<input id="password" name="password" type="password" value="123456"/>
-			<button onclick="getPicture();">Take Photo</button>
-			<img style="width:60px;" id="test_img" src="" /> 
-		</fieldset>
-		<p><button onclick="signUp();">Sign Up</button></p>
-    </div>
-    
-</div>
 
 </body>
 

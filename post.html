@@ -1,21 +1,21 @@
 <!DOCTYPE HTML>
-<html>
+<html manifest="/regimo.appcache">
 <head>
 </head>
-    
+
 <body>
 
-<div id="postPage" data-role="page" data-add-back-btn="true">
+	<div id="postPage" data-role="page" data-add-back-btn="true">
 
-	<div data-role="header">
-		<h1 id="title"></h1>
+		<div onclick="javascript:window.plugins.tts.interrupt();" data-role="header" data-theme="i" data-position="fixed">
+			<h1 id="title"></h1>
+		</div>
+
+		<div data-role="content">
+			<p id="content" style="white-space: pre-line;"></p>
+		</div>
+
 	</div>
-
-	<div data-role="content">
-         <p id="content" style="white-space: pre-line;"></p>
-    </div>
-    
-</div>
 
 </body>
 

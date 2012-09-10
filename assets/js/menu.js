@@ -1,9 +1,17 @@
-var serviceURL = "http://regimo.poloniouslive.com/";
+//var serviceURL = "http://regimo.poloniouslive.com/";
+var serviceURL = "http://192.168.2.3:8080/";
+//var serviceURL = "http://192.168.0.101:8080/";
 
 var terms;
 var slug;
 var postName;
+		
+function toggleMainMenu() {
+	$( "#main-menu" ).toggle( 'clip', null, 200);
+	return false;
+};
 
+$( "#main-menu" ).hide();
 
 $('#menuListPage').bind('pageinit', function(event) {
 	$.support.cors=true;
